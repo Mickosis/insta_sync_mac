@@ -77,6 +77,7 @@ Needs macOS 14 or later and the Xcode Command Line Tools (`xcode-select --instal
 scripts/build_app.sh               # builds "Insta Sync.app" in this folder (git-ignored)
 scripts/build_app.sh /Applications # or somewhere else
 scripts/test.sh                    # unit tests
+swift scripts/make_icon.swift      # redraws Resources/AppIcon.icns and AppIcon.png
 ```
 
 Open **Insta Sync.app**. On the first run, macOS asks for Contacts access and to let Insta Sync control Contacts; allow both. Each rebuild has a new ad-hoc signature, so macOS asks again after rebuilding.
@@ -87,7 +88,7 @@ If the old Python version's `data/` folder is in this project folder, the first 
 
 - `Sources/InstaSyncCore/`: handle parsing, phone formatting, matching, cleanup rules, data files. No UI; covered by `Tests/`.
 - `Sources/InstaSync/`: the app. `Instagram/` (hidden browser, login window, lookups), `Contacts/` (framework + Notes), `Jobs/` (task queue and the sync/link/cleanup steps), `UI/` (SwiftUI views).
-- `Resources/`: `Info.plist` and the app icon. `scripts/`: build and test.
+- `Resources/`: `Info.plist` and the app icon. `scripts/`: build, test and icon drawing.
 
 ## Notes
 
