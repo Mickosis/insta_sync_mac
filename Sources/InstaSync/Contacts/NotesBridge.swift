@@ -1,4 +1,5 @@
 import Foundation
+import InstaSyncCore
 
 /// Contacts' Notes, through AppleScript to Contacts.app (the Contacts framework can't
 /// read Notes without a restricted Apple entitlement). Only used when a job changes a
@@ -113,5 +114,32 @@ final class NotesBridge: @unchecked Sendable {
         end tell
         end run
         """, [id, url])
+    }
+
+    /// Rewrite phone numbers through Contacts.app (fallback when the framework save fails):
+    /// one change per number on the card, in order. Nothing is changed unless every number
+    /// is still what the plan expects, in the same order.
+    func applyPhones(_ id: String, changes: [Phones.Change]) throws {
+        _ = try run("""
+        on run argv
+        tell application "Contacts"
+          set p to person id (item 1 of argv)
+          set n to ((count of argv) - 1) div 2
+          if (count of phones of p) is not n then error "phone list changed"
+          repeat with i from 1 to n
+            if (value of phone i of p) is not (item (i * 2) of argv) then error "phone list changed"
+          end repeat
+          repeat with i from n to 1 by -1
+            set newValue to item (i * 2 + 1) of argv
+            if newValue is "" then
+              delete phone i of p
+            else if newValue is not (item (i * 2) of argv) then
+              set value of phone i of p to newValue
+            end if
+          end repeat
+          save
+        end tell
+        end run
+        """, [id] + changes.flatMap { [$0.old, $0.new ?? $0.old] })
     }
 }

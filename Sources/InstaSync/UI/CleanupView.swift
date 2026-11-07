@@ -7,22 +7,16 @@ struct CleanupView: View {
     @ViewState private var backups: [AppModel.BackupFolder] = []
 
     enum Action: Identifiable {
-        case google(Int), phones(Int)
-        var id: String {
-            switch self {
-            case .google: return "google"
-            case .phones: return "phones"
-            }
-        }
+        case phones(Int)
+        var id: String { "phones" }
     }
 
     var body: some View {
-        let google = model.googleRows, phones = model.phoneRows
+        let phones = model.phoneRows
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 PageHeader(title: "Cleanup & backups",
-                           subtitle: "Every sync does these too. Each contact is backed up before it's changed.")
-                googleCard(google)
+                           subtitle: "Every sync standardizes phone numbers too. Each contact is backed up before it's changed.")
                 phonesCard(phones)
                 backupsCard
             }
@@ -30,10 +24,10 @@ struct CleanupView: View {
         }
         .onAppear { backups = model.backups() }
         .onChange(of: model.people) { backups = model.backups() }
+        .onChange(of: model.backupsTrimmed) { backups = model.backups() }
         .confirmationDialog(confirmTitle, isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } }),
                             presenting: confirm) { a in
             switch a {
-            case .google: Button("Remove links", role: .destructive) { model.cleanGoogleProfiles() }
             case .phones: Button("Standardize") { model.fixPhones() }
             }
         } message: { _ in Text("Each contact is backed up first.") }
@@ -41,37 +35,8 @@ struct CleanupView: View {
 
     private var confirmTitle: String {
         switch confirm {
-        case .google(let n): return "Remove old Google profile links from \(n) contact\(n == 1 ? "" : "s")?"
         case .phones(let n): return "Standardize phone numbers on \(n) iCloud contact\(n == 1 ? "" : "s")?"
         case nil: return ""
-        }
-    }
-
-    private func googleCard(_ rows: [Person]) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Old Google profile links").font(.headline)
-                Text("Google+ added google.com/profiles/… links to contacts. It closed in 2019, so these links go nowhere.")
-                    .font(.callout).foregroundStyle(.secondary)
-                if rows.isEmpty {
-                    Text("No contacts have old Google profile links. ✓").fontWeight(.medium)
-                } else {
-                    Text("**\(rows.count)** contact\(rows.count == 1 ? " has" : "s have") one:")
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(rows) { p in
-                                VStack(alignment: .leading, spacing: 0) {
-                                    Text(p.name.isEmpty ? "(no name)" : p.name).fontWeight(.medium)
-                                    ForEach(p.googleProfileURLs, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 160)
-                    Button("Remove Google profile links") { confirm = .google(rows.count) }.disabled(model.jobs.isBusy)
-                }
-            }
         }
     }
 
@@ -123,8 +88,9 @@ struct CleanupView: View {
                     Spacer()
                     Button("Show in Finder") { model.reveal(model.storage.paths.backups) }.controlSize(.small)
                 }
-                Text("Saved before any contact is moved, merged, cleaned or has its numbers reformatted, with its photo and Notes. Restore opens the card in Contacts, which asks before importing.")
+                Text("Saved before any contact is moved, merged, cleaned or has its numbers reformatted, with its photo and Notes. Each contact keeps its original backup and its 2 latest different versions; older ones are deleted automatically. Restore opens the card in Contacts, which asks before importing.")
                     .font(.callout).foregroundStyle(.secondary)
+                if !backups.isEmpty { Text(backupTotal).font(.caption).foregroundStyle(.secondary) }
                 if backups.isEmpty {
                     Text("No backups yet.").foregroundStyle(.secondary)
                 } else {
@@ -134,6 +100,15 @@ struct CleanupView: View {
                 }
             }
         }
+    }
+}
+
+private extension CleanupView {
+    var backupTotal: String {
+        let files = backups.flatMap(\.files)
+        let bytes = files.reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+        let size = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+        return "\(files.count) backup\(files.count == 1 ? "" : "s") · \(size)"
     }
 }
 

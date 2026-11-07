@@ -375,8 +375,14 @@ final class ContactsService: @unchecked Sendable {
         }
         let safe = fullName(c).replacingOccurrences(of: "/", with: "-")
         let short = id.split(separator: "-").first.map(String.init) ?? id
+        let name = "\(safe.isEmpty ? "contact" : safe)_\(short).vcf"
+        // Nothing changed since the last backup of this card: that one still covers it.
+        if let last = BackupRetention.latest(named: name, in: dir.deletingLastPathComponent()),
+           (try? Data(contentsOf: last)) == Data(text.utf8) {
+            return last
+        }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = dir.appendingPathComponent("\(safe.isEmpty ? "contact" : safe)_\(short).vcf")
+        let url = dir.appendingPathComponent(name)
         try text.write(to: url, atomically: true, encoding: .utf8)
         return url
     }

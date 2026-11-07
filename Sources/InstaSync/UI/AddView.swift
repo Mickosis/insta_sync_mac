@@ -1,5 +1,7 @@
+import AppKit
 import InstaSyncCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AddView: View {
     private var model: AppModel { .shared }
@@ -7,6 +9,9 @@ struct AddView: View {
     @ViewState private var showTagged = false
     @ViewState private var open: String?
     @ViewState private var handle = ""
+    @ViewState private var photoData: Data?
+    @ViewState private var photoLink = ""
+    @ViewState private var dropTargeted = false
     @FocusState private var handleFocused: Bool
 
     var body: some View {
@@ -18,8 +23,8 @@ struct AddView: View {
                     || p.emails.contains { $0.lowercased().contains(term) })
         }
         VStack(alignment: .leading, spacing: 14) {
-            PageHeader(title: "Add an Instagram profile",
-                       subtitle: "\(untagged) contact\(untagged == 1 ? "" : "s") without an Instagram handle. Click one, then type their username or paste their profile link. It saves their profile link in an Instagram URL field, moves the contact to iCloud and sets the HD photo.")
+            PageHeader(title: "Add to iCloud",
+                       subtitle: "\(untagged) contact\(untagged == 1 ? "" : "s") without an Instagram handle. Click one, then type their username or paste their profile link: it saves the link in an Instagram URL field, moves the contact to iCloud and sets the HD photo. Or leave the handle empty and move them to iCloud as they are, with a photo of your own if you like.")
             HStack {
                 TextField("Filter by name, phone or email", text: $filter)
                     .textFieldStyle(.roundedBorder)
@@ -66,6 +71,7 @@ struct AddView: View {
                                 Spacer()
                             }
                             .padding(.leading, 40)
+                            if p.handle == nil { photoRow(p).padding(.leading, 40) }
                         }
                     }
                     .padding(.vertical, 3)
@@ -78,10 +84,108 @@ struct AddView: View {
         .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
     }
 
+    /// Move without a handle, with an optional photo. Off while a handle is typed: the
+    /// Instagram photo wins, and sync would replace a manual one anyway.
+    private func photoRow(_ p: Person) -> some View {
+        let handleTyped = !handle.trimmingCharacters(in: .whitespaces).isEmpty
+        let link = photoLink.trimmingCharacters(in: .whitespaces)
+        let hasPhoto = photoData != nil || !link.isEmpty
+        let inICloud = model.isICloud(p.id)
+        return HStack(spacing: 10) {
+            dropZone(enabled: !handleTyped)
+            TextField("or paste an image link (https://…)", text: $photoLink)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 260)
+                .disabled(handleTyped)
+                .onChange(of: photoLink) { _, new in
+                    if !new.isEmpty { photoData = nil }
+                }
+            if hasPhoto {
+                Button("Clear") { resetPhoto() }
+                    .disabled(handleTyped)
+            }
+            Button(inICloud ? "Save photo" : "Move to iCloud") { move(p) }
+                .disabled(handleTyped || (inICloud && !hasPhoto))
+            Spacer()
+        }
+    }
+
+    private func dropZone(enabled: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 8)
+        return ZStack {
+            if let photoData, let image = NSImage(data: photoData) {
+                Image(nsImage: image).resizable().scaledToFill()
+            } else {
+                Text("Drop a photo").font(.caption2).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center).padding(4)
+            }
+        }
+        .frame(width: 56, height: 56)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(dropTargeted ? Color.accentColor : Color.secondary.opacity(0.4),
+                                    style: StrokeStyle(lineWidth: dropTargeted ? 2 : 1, dash: photoData == nil ? [4] : [])))
+        .opacity(enabled ? 1 : 0.4)
+        .onDrop(of: [.fileURL, .image, .url], isTargeted: $dropTargeted) { providers in
+            enabled && drop(providers)
+        }
+    }
+
+    /// Finder files and image data become the photo; a web link fills the link field.
+    private func drop(_ providers: [NSItemProvider]) -> Bool {
+        guard let item = providers.first else { return false }
+        if item.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            _ = item.loadObject(ofClass: URL.self) { url, _ in
+                let data = url.flatMap { try? Data(contentsOf: $0) }
+                DispatchQueue.main.async { setDropped(data) }
+            }
+        } else if item.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+            item.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                DispatchQueue.main.async { setDropped(data) }
+            }
+        } else if item.canLoadObject(ofClass: URL.self) {
+            _ = item.loadObject(ofClass: URL.self) { url, _ in
+                DispatchQueue.main.async {
+                    if let url { photoLink = url.absoluteString }
+                }
+            }
+        } else {
+            return false
+        }
+        return true
+    }
+
+    private func setDropped(_ data: Data?) {
+        guard let data, NSImage(data: data) != nil else {
+            model.show("That isn't an image.")
+            return
+        }
+        photoLink = ""
+        photoData = data
+    }
+
+    private func resetPhoto() {
+        photoData = nil
+        photoLink = ""
+    }
+
+    private func move(_ p: Person) {
+        var source: AppModel.PhotoSource?
+        if let photoData {
+            source = .data(photoData)
+        } else if !photoLink.trimmingCharacters(in: .whitespaces).isEmpty {
+            guard let url = model.photoLinkURL(photoLink) else { return }
+            source = .link(url)
+        }
+        model.moveToICloud(p, photo: source)
+        resetPhoto()
+        open = nil
+    }
+
     private func toggle(_ p: Person) {
         if open == p.id { open = nil; return }
         open = p.id
         handle = p.handle.map { "@" + $0 } ?? ""
+        resetPhoto()
         DispatchQueue.main.async { handleFocused = true }
     }
 
@@ -89,6 +193,7 @@ struct AddView: View {
         let h = handle.trimmingCharacters(in: .whitespaces)
         guard !h.isEmpty else { return }
         model.link(p, handle: h, kind: "add")
+        resetPhoto()
         open = nil
     }
 }

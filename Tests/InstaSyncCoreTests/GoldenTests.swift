@@ -38,12 +38,6 @@ struct Golden {
     }
 }
 
-@Test func googleProfileLinks() {
-    for r in Golden.rows("gprofile") {
-        #expect(Cleanup.gprofileRE.matches(r[0] as! String) == r[1] as! Bool, "\(r[0])")
-    }
-}
-
 @Test func tokens() {
     for r in Golden.rows("tokens") {
         #expect(Matching.tokens(r[0] as? String) == r[1] as! [String], "\(r[0])")

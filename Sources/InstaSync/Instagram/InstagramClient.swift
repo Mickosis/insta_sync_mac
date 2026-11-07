@@ -238,7 +238,7 @@ enum PhotoPipeline {
     static func prepare(_ data: Data) throws -> Photo {
         guard let src = CGImageSourceCreateWithData(data as CFData, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] else {
-            throw InstaError.other("The downloaded photo isn't an image.")
+            throw InstaError.other("That isn't an image.")
         }
         let w = props[kCGImagePropertyPixelWidth] as? Int ?? 0
         let h = props[kCGImagePropertyPixelHeight] as? Int ?? 0

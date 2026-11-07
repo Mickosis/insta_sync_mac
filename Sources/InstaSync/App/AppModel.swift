@@ -56,6 +56,8 @@ final class AppModel {
     var following: FollowingCache?
     var syncState: [String: SyncRecord] = [:]
     var noneIDs: Set<String> = []
+    /// Goes up when old backups are deleted, so the list on screen can refresh.
+    var backupsTrimmed = 0
 
     /// Find matches rows (nil while computing).
     var matchRows: [Matching.Row]?
@@ -83,6 +85,7 @@ final class AppModel {
 
     func start() async {
         loadFiles()
+        await pruneBackups()
         await refreshLogin()
         do {
             try await engine.contacts.requestAccess()
@@ -154,6 +157,7 @@ final class AppModel {
     private func jobFinished(_ job: Job) {
         if job.status == .done, let s = job.summary { show(s) }
         Task {
+            await pruneBackups()
             await refreshLogin()
             await reload()
         }
@@ -182,7 +186,6 @@ final class AppModel {
 
     var visibleMatches: [Matching.Row]? { matchRows?.filter { !dismissedMatches.contains($0.id) } }
 
-    var googleRows: [Person] { people.filter { !$0.googleProfileURLs.isEmpty } }
     var phoneRows: [PhoneRow] { Engine.phoneRows(people, accounts: accounts, iCloudID: iCloudID) }
 
     func searchFollowing(_ q: String, for contact: Person?) -> [Matching.Candidate] {
@@ -201,7 +204,6 @@ final class AppModel {
             let people = try engine.people()
             let rows = people.filter { $0.handle != nil && (ids == nil || ids!.contains($0.id)) }
             run.say("Syncing \(rows.count) contact(s)…", done: 0, total: rows.count)
-            _ = try run.cleanGoogleProfiles(people.filter { !$0.googleProfileURLs.isEmpty })
             let r = try await run.sync(rows)
             _ = try run.fixPhones(try run.currentPhoneRows())
             let text = "Done: \(r.done) of \(r.total) photos synced" + (r.moved.isEmpty ? "" : ", \(r.moved.count) moved to iCloud")
@@ -226,6 +228,50 @@ final class AppModel {
         }
         dismissedMatches.insert(p.id)
         picks[p.id] = nil
+    }
+
+    /// A photo chosen by hand in Add: dropped image data, or a link to download.
+    enum PhotoSource: Sendable {
+        case data(Data)
+        case link(URL)
+    }
+
+    /// The typed photo link, or nil (with a message) if it can't be used. Only https: the app
+    /// has no App Transport Security exception, so a plain http download would fail.
+    func photoLinkURL(_ typed: String) -> URL? {
+        let text = typed.trimmingCharacters(in: .whitespaces)
+        guard let url = URL(string: text), url.scheme?.lowercased() == "https", url.host?.isEmpty == false else {
+            show("Photo links must start with https://.")
+            return nil
+        }
+        return url
+    }
+
+    /// Move a contact to iCloud without an Instagram handle, with an optional photo.
+    func moveToICloud(_ p: Person, photo source: PhotoSource?) {
+        let engine = self.engine
+        jobs.submit(kind: "add", title: "\(p.name) → iCloud") { ctx in
+            let run = engine.run(ctx)
+            run.say("Moving \(p.name) to iCloud…", done: 0, total: 1)
+            // Get the photo first, so a bad link or file fails with the card untouched.
+            let photo: PhotoPipeline.Photo?
+            switch source {
+            case .data(let data): photo = try PhotoPipeline.prepare(data)
+            case .link(let url): photo = try await PhotoPipeline.download(url)
+            case nil: photo = nil
+            }
+            let (newID, summary) = try await run.moveWithoutHandle(p.id, name: p.name, photo: photo)
+            if newID != p.id { await self.carryNone(from: p.id, to: newID) }
+            run.say(summary, done: 1, total: 1)
+            ctx.summary("\(p.name): \(summary)")
+        }
+    }
+
+    /// Moving a card changes its id; keep its "None" answer.
+    private func carryNone(from old: String, to new: String) {
+        guard noneIDs.remove(old) != nil else { return }
+        noneIDs.insert(new)
+        storage.saveNone(noneIDs)
     }
 
     /// Link several contacts in one job (Find matches → Link N).
@@ -298,18 +344,7 @@ final class AppModel {
             let rows = try run.currentPhoneRows()
             run.say("Standardizing phone numbers on \(rows.count) contact(s)…", done: 0, total: rows.count)
             let n = try run.fixPhones(rows)
-            run.say("Done: \(n) contact(s) updated.", done: n, total: n)
-        }
-    }
-
-    func cleanGoogleProfiles() {
-        let engine = self.engine
-        jobs.submit(kind: "gprofile", title: "Remove old Google profile links") { ctx in
-            let run = engine.run(ctx)
-            let rows = try engine.people().filter { !$0.googleProfileURLs.isEmpty }
-            run.say("Removing old Google profile links from \(rows.count) contact(s)…", done: 0, total: rows.count)
-            let n = try run.cleanGoogleProfiles(rows)
-            run.say("Done: removed old Google profile links from \(n) contact(s).", done: n, total: n)
+            run.say("Done: \(n) of \(rows.count) contact(s) updated.", done: n, total: rows.count)
         }
     }
 
@@ -334,6 +369,16 @@ final class AppModel {
     }
 
     // MARK: - backups
+
+    /// Trim old backups, unless a job is running or waiting and may be writing some.
+    func pruneBackups() async {
+        guard !jobs.isBusy else { return }
+        let root = storage.paths.backups
+        let removed = await Task.detached { BackupRetention.prune(in: root) }.value
+        guard removed.files > 0 else { return }
+        BrowserLog.write("backups: removed \(removed.files) old file(s), \(removed.bytes / 1000) KB")
+        backupsTrimmed += 1
+    }
 
     struct BackupFolder: Identifiable {
         var url: URL

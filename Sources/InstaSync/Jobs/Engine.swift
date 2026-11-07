@@ -179,6 +179,24 @@ final class Engine: @unchecked Sendable {
             return (newID, parts.joined(separator: " · "))
         }
 
+        /// Move to iCloud with no Instagram link, then set the chosen photo if there is one.
+        /// Returns (id afterwards, summary). The photo is only set once the card is in iCloud:
+        /// a dismissed merge question leaves the card as it was.
+        func moveWithoutHandle(_ id: String, name: String, photo: PhotoPipeline.Photo?) async throws -> (String, String) {
+            try backup(id)
+            let newID = try await ensureICloud(id, name: name)
+            guard contacts.account(of: newID)?.id == (try iCloudID()) else { return (newID, "not moved") }
+            var parts = newID != id ? ["moved to iCloud"] : []
+            if let photo {
+                // After a merge this is a different card, whose photo is about to be replaced.
+                try backup(newID)
+                try savePhoto(newID, photo.jpeg)
+                parts.append("photo set")
+                say("\(name): photo set")
+            }
+            return (newID, parts.isEmpty ? "already in iCloud" : parts.joined(separator: " · "))
+        }
+
         // MARK: - sync
 
         struct SyncResult {
@@ -233,24 +251,37 @@ final class Engine: @unchecked Sendable {
 
         // MARK: - cleanup
 
-        /// Back up, then delete old Google profile links.
-        func cleanGoogleProfiles(_ rows: [Person]) throws -> Int {
-            for p in rows { try backup(p.id) }
-            for p in rows { try contacts.deleteURLs(p.id, values: p.googleProfileURLs) }
-            if !rows.isEmpty { say("Removed old Google profile links from \(rows.count) contact(s). Backup: \(backupDir.path)") }
-            return rows.count
-        }
-
         /// Back up, then rewrite the phone numbers.
         func fixPhones(_ rows: [PhoneRow]) throws -> Int {
             for r in rows { try backup(r.id) }
+            var fixed = 0
             for r in rows {
-                do { try contacts.applyPhones(r.id, changes: r.plan.phones) } catch {
+                do {
+                    try savePhones(r)
+                    fixed += 1
+                } catch {
                     say("\(r.name): phone numbers not changed (\(error.localizedDescription))")
                 }
             }
-            if !rows.isEmpty { say("Standardized phone numbers on \(rows.count) contact(s). Backup: \(backupDir.path)") }
-            return rows.count
+            if !rows.isEmpty {
+                // No folder if every card already had an identical backup.
+                let saved = FileManager.default.fileExists(atPath: backupDir.path)
+                say("Standardized phone numbers on \(fixed) of \(rows.count) contact(s)." + (saved ? " Backup: \(backupDir.path)" : ""))
+            }
+            return fixed
+        }
+
+        /// Save through the Contacts framework; if the database refuses, through Contacts.app.
+        private func savePhones(_ r: PhoneRow) throws {
+            do {
+                try contacts.applyPhones(r.id, changes: r.plan.phones)
+            } catch let e as ContactsService.Fail {
+                throw e
+            } catch {
+                BrowserLog.write("phones via Contacts framework failed (\(error.detail)); using Contacts.app")
+                try notes.applyPhones(r.id, changes: r.plan.phones)
+                BrowserLog.write("phones saved via Contacts.app")
+            }
         }
 
         /// Current planned phone fixes (re-read, since earlier steps may have moved contacts).

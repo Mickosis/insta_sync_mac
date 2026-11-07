@@ -5,9 +5,6 @@ public enum Cleanup {
     /// Old HTC Sense phones wrote <HTCData><Facebook>id:…/friendof:…</Facebook></HTCData> into Google contact Notes.
     public static let htcRE = PyRegex("<HTCData>.*?</HTCData>", caseInsensitive: true, dotAll: true)
 
-    /// Google+ (closed 2019) added "Profile" URLs like http://www.google.com/profiles/<number>.
-    public static let gprofileRE = PyRegex(#"(plus\.)?google\.com/(profiles/|\+|u/\d+/)"#, caseInsensitive: true)
-
     public static func stripHTC(_ note: String?) -> String { htcRE.sub(note ?? "").pyStrip }
 
     /// Notes of two cards being merged: the destination's lines, then new lines from the source.

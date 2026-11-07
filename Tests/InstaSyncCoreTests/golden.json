@@ -211,28 +211,6 @@
    "same\nnew"
   ]
  ],
- "gprofile": [
-  [
-   "http://www.google.com/profiles/1234",
-   true
-  ],
-  [
-   "https://plus.google.com/+Name",
-   true
-  ],
-  [
-   "google.com/u/0/abc",
-   true
-  ],
-  [
-   "https://google.com/search",
-   false
-  ],
-  [
-   "https://plus.google.com/u/1/x",
-   true
-  ]
- ],
  "tokens": [
   [
    "José Núñez",

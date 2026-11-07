@@ -29,7 +29,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSContactsUsageDescription</key>
-	<string>Insta Sync sets your contacts' photos from Instagram, moves contacts with an Instagram handle to iCloud, and backs up every card before changing it.</string>
+	<string>Insta Sync sets your contacts' photos from Instagram, moves contacts to iCloud, and backs up every card before changing it.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Insta Sync reads and writes contacts' Notes through Contacts, because macOS only lets apps reach Notes that way.</string>
 	<key>InstaSyncLegacyDataPath</key>

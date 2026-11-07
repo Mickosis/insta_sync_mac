@@ -8,11 +8,10 @@ The window has four sections:
 
 - **Contacts**: every contact with an Instagram handle, with its photo, account (iCloud or Google) and when its photo was last synced. **Sync all**, **Sync selected**, or per contact **Sync**, **Edit** (change the handle) and **Remove** (delete the Instagram link). Syncing moves contacts that aren't in iCloud yet, then sets the HD photo.
 - **Find matches**: each contact appears with the accounts you follow that might be them, with photos. Click the right account in as many rows as you like (or **Select strong matches**), then **Link N**. They're all linked in one go: Instagram link saved, the contact moved to iCloud, and the HD photo set. If the right account isn't shown, **Search…** in that row searches the accounts you follow by name or username. You can also type any `@username` (or paste a profile link) and pick it the same way. **Search on Instagram ↗** opens a Google search of Instagram for that name in your normal browser. **None** means don't ask about this contact again. **Skip** asks again next time.
-- **Add**: lists every contact without an Instagram handle, with a filter (name, phone or email). Tick the box to include contacts that already have one, to change it. Click a contact, type a username or paste a profile link, then **Link**. It saves the profile link in an **Instagram** URL field, moves the contact to iCloud and sets the photo.
+- **Add**: lists every contact without an Instagram handle, with a filter (name, phone or email). Tick the box to include contacts that already have one, to change it. Click a contact, type a username or paste a profile link, then **Link**. It saves the profile link in an **Instagram** URL field, moves the contact to iCloud and sets the photo. To keep a contact off Instagram, leave the handle empty and click **Move to iCloud** instead. You can drop a photo on the row or paste an `https` image link, or skip the photo. Sync leaves these contacts alone, and they stay in **Add** rather than **Contacts**.
 - **Cleanup & backups**:
   - **Phone numbers**: formats iCloud contacts' numbers as `+63 917 123 4567` (landlines `+63 2 8123 4567`, US `+1 212 555 0123`) and removes a number that appears twice on the same contact. You see every change before confirming. Numbers it can't safely recognize, such as `1-800-MY-APPLE`, short codes and other countries, are left as they are. Every sync does this too.
-  - **Old Google profile links**: deletes the `google.com/profiles/…` links that Google+ (closed in 2019) added to contacts. Every sync removes them too.
-  - **Backups**: lists every backup with **Show in Finder** and **Restore**.
+  - **Backups**: lists every backup with **Show in Finder** and **Restore**. Each contact keeps its oldest backup and its 2 latest different versions. Older versions are deleted automatically, on launch and after each job, and a card that hasn't changed isn't backed up again.
 
 Long tasks show their progress in a panel at the bottom of the window, with **Stop**. If one needs a decision, such as whether to merge with a card that's already in iCloud, the question appears there. Tasks run one at a time; more wait their turn.
 
@@ -40,7 +39,7 @@ Handles typed into a contact's Notes are not read. Use **Add**, **Find matches**
 
 ## Moving contacts to iCloud
 
-Only contacts with an Instagram handle are moved, from any other account (e.g. Google, On My Mac). Everything else stays where it is, and your default account doesn't change.
+Contacts with an Instagram handle are moved automatically, from any other account (e.g. Google, On My Mac). A contact without a handle moves only when you click **Move to iCloud** in **Add**. Everything else stays where it is, and your default account doesn't change.
 
 Each move:
 1. saves a backup `.vcf` (with the photo and Notes);
@@ -65,7 +64,7 @@ A contact appears only if at least one followed account plausibly matches: first
 
 ## Privacy
 
-- Everything stays on your Mac. Insta Sync talks only to instagram.com and Instagram's picture servers (to look up profiles and download pictures), and to Apple's Contacts on your Mac. It has no server and sends no analytics.
+- Everything stays on your Mac. Insta Sync talks only to instagram.com and Instagram's picture servers (to look up profiles and download pictures), to any image link you paste in **Add**, and to Apple's Contacts on your Mac. It has no server and sends no analytics.
 - Your Instagram login lives in Insta Sync's own browser storage. **Import Login** reads only the instagram.com cookies of the browser you pick, once, when you click it. It never reads other sites' cookies, and never sees your password.
 - Before changing a contact it saves a `.vcf` backup. Backups, the following list, sync history and a troubleshooting log (`browser.log`, capped at about 1 MB, without passwords, cookies or what you type) are in `~/Library/Application Support/Insta Sync/`. Delete that folder to remove them.
 

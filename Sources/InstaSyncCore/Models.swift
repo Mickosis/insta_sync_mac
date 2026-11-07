@@ -34,7 +34,6 @@ public struct Person: Identifiable, Hashable, Sendable {
     /// The Instagram handle, from the card's Instagram URL field.
     public var handle: String? { instagramURL.flatMap(Handles.username(from:)) }
 
-    public var googleProfileURLs: [String] { urls.filter { Cleanup.gprofileRE.matches($0) } }
 }
 
 /// An Instagram account you follow (cached following list).
